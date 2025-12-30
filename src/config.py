@@ -43,14 +43,14 @@ class TrainConfig:
     gen_batch_size: int = 16
     gradient_accumulation_steps: int = 8
     learning_rate: float = 5e-5
-    num_epochs: int = 5
+    num_epochs: int = 10
     warmup_ratio: float = 0.03
     weight_decay: float = 0.01
     max_grad_norm: float = 1.0
 
     # --- LoRA ---
-    lora_rank: int = 16
-    lora_alpha: int = 32
+    lora_rank: int = 32
+    lora_alpha: int = 64
     lora_dropout: float = 0.05
     lora_target_modules: List[str] = field(default_factory=lambda: [
         "q_proj", "k_proj", "v_proj", "o_proj", "gate_proj", "up_proj", "down_proj"

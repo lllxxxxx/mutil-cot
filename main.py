@@ -19,7 +19,7 @@ def main():
     setup_seed(cfg.seed)
     model, tokenizer = load_model_and_tokenizer(cfg)
 
-    train_dataset = QwenSFTDataset(cfg.generated_data_paths, tokenizer, cfg.max_length)
+    train_dataset = QwenSFTDataset(cfg.generated_data_paths, tokenizer, cfg.max_length,cfg.seed)
     train_collator = ManualCollator(tokenizer, use_flash_attn=cfg.use_flash_attn, for_inference=False,
                                     use_4d_mask=cfg.enable_4d_mask)
     train_loader = DataLoader(train_dataset, batch_size=cfg.batch_size, shuffle=True, collate_fn=train_collator,

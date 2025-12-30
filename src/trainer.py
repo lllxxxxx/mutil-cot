@@ -133,7 +133,8 @@ class ManualTrainer:
 
         for i, loader in enumerate(dataloaders):
             view_name = self.cfg.view_names[i]
-
+            tmp_pred=[]
+            tmp_label=[]
             for batch in tqdm(loader, desc=f"{stage} {view_name}", leave=False):
                 inputs = {
                     "input_ids": batch["input_ids"].to(self.cfg.device),
@@ -158,6 +159,12 @@ class ManualTrainer:
                     label = self._extract_label(text)
                     results_map[idx].append(label)
                     gold_labels_map[idx] = gold
+                    tmp_pred.append(label)
+                    tmp_label.append(gold)
+            tmp_f1=self._compute_char_f1(tmp_pred, tmp_label)
+            print(f"角度：{view_name}   F1: {tmp_f1:.4f}")
+            if self.cfg.use_swanlab and SWANLAB_INSTALLED:
+                swanlab.log({f"{view_name}/f1": tmp_f1})
 
         final_preds = []
         final_truths = []

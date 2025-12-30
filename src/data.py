@@ -1,6 +1,7 @@
 import json
 import torch
 import numpy as np
+import random
 from torch.utils.data import Dataset
 from transformers import DataCollatorForSeq2Seq
 
@@ -17,14 +18,27 @@ def prepare_4d_attention_mask(attention_mask_with_indices: torch.Tensor, dtype: 
 
 
 class QwenSFTDataset(Dataset):
-    def __init__(self, data_path, tokenizer, max_length):
+    def __init__(self, data_path, tokenizer, max_length,seed):
         self.tokenizer = tokenizer
         self.max_length = max_length
         self.data = []
         if isinstance(data_path, str): data_path = [data_path]
-        for path in data_path:
-            with open(path, 'r', encoding='utf-8') as f:
-                self.data.extend(json.load(f))
+
+        rng = random.Random(seed)
+
+        d1 = json.load(open(data_path[0], "r", encoding="utf-8"))
+        d2 = json.load(open(data_path[1], "r", encoding="utf-8"))
+        d3 = json.load(open(data_path[2], "r", encoding="utf-8"))
+        n = len(d1)
+        k, r = divmod(n, 3)
+        parts = [k + (i < r) for i in range(3)]
+
+        self.data = (
+            rng.sample(d1, parts[0]) +
+            rng.sample(d2, parts[1]) +
+            rng.sample(d3, parts[2])
+        )
+        rng.shuffle(self.data)
 
     def __len__(self):
         return len(self.data)
