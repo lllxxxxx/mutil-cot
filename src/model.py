@@ -50,6 +50,6 @@ def load_model_and_tokenizer(cfg: TrainConfig):
     )
     model = get_peft_model(model, peft_config)
     model.print_trainable_parameters()
-    model.to(cfg.device)
+    # model.to(cfg.device)  # Managed by Accelerator
 
     return model, tokenizer

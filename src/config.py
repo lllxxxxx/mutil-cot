@@ -14,6 +14,7 @@ class TrainConfig:
     val_data_path: str = "./data/raw/dev_data.json"
     test_data_path: str = "./data/raw/test_data.json"
     output_dir: str = "./saves/qwen2.5-7B-Instruct"
+    num_gpus: int = 1
 
     # --- API 与 数据生成配置 ---
     api_key: str = "sk-9b269e0b1d8d410f9bcd8373e48c0842"

@@ -1,12 +1,13 @@
 #!/bin/bash
 
-export CUDA_VISIBLE_DEVICES=0
 
-export PYTHONPATH=$PYTHONPATH:$(pwd)
+# 获取 num_gpus
+NUM_GPUS=$(python -c "from src.config import TrainConfig; from transformers import HfArgumentParser; parser = HfArgumentParser((TrainConfig,)); cfg, = parser.parse_args_into_dataclasses(); print(cfg.num_gpus)")
 
-echo "Starting Training..."
+echo "Starting Training with $NUM_GPUS GPUs..."
 
-python main.py \
+
+accelerate launch --num_processes $NUM_GPUS --multi_gpu --mixed_precision bf16 main.py \
     --template qwen \
 
 
