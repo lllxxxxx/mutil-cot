@@ -23,21 +23,15 @@ class QwenSFTDataset(Dataset):
         self.max_length = max_length
         self.data = []
         if isinstance(data_path, str): data_path = [data_path]
-
         rng = random.Random(seed)
-
         d1 = json.load(open(data_path[0], "r", encoding="utf-8"))
-        d2 = json.load(open(data_path[1], "r", encoding="utf-8"))
-        d3 = json.load(open(data_path[2], "r", encoding="utf-8"))
         n = len(d1)
         k, r = divmod(n, 3)
         parts = [k + (i < r) for i in range(3)]
 
-        self.data = (
-            rng.sample(d1, parts[0]) +
-            rng.sample(d2, parts[1]) +
-            rng.sample(d3, parts[2])
-        )
+        for i,path in enumerate(data_path):
+            data=json.loads(open(path, "r", encoding="utf-8").read())
+            self.data.extend(rng.sample(data, parts[0]))
         rng.shuffle(self.data)
 
     def __len__(self):
@@ -49,8 +43,7 @@ class QwenSFTDataset(Dataset):
 
         instruction = f"{user_content}\n\n###输出：\n"
         response = f"{item['output']}<|endoftext|>"
-        all=instruction+response
-        print(all)
+
         enc_instr = self.tokenizer.encode(instruction, add_special_tokens=False)
         enc_res = self.tokenizer.encode(response, add_special_tokens=False)
 
