@@ -143,7 +143,7 @@ class ManualTrainer:
 
                 outputs = self.model.generate(
                     **inputs,
-                    max_new_tokens=256,
+                    max_new_tokens=168,
                     do_sample=False,
                     eos_token_id=self.tokenizer.eos_token_id
                 )

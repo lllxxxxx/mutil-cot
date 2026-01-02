@@ -45,11 +45,12 @@ class QwenSFTDataset(Dataset):
 
     def __getitem__(self, idx):
         item = self.data[idx]
-        user_content = item['instruction'] + item.get('input', '')
+        user_content = item['instruction'] + "\n"+item.get('input', '')
 
-        instruction = f"<|im_start|>user\n{user_content}<|im_end|>\n<|im_start|>assistant\n"
-        response = f"{item['output']}<|im_end|>"
-
+        instruction = f"{user_content}\n\n###输出：\n"
+        response = f"{item['output']}<|endoftext|>"
+        all=instruction+response
+        print(all)
         enc_instr = self.tokenizer.encode(instruction, add_special_tokens=False)
         enc_res = self.tokenizer.encode(response, add_special_tokens=False)
 
@@ -77,17 +78,20 @@ class QwenPredictDataset(Dataset):
 
         self.prompt_template = """您的目标是在给定一段社交媒体中文多轮会话的前提下，判断#当前轮发言#对#指定目标#的立场。可选标签仅包括：#支持#、#反对#、#中立#。
 
+请从#{view_name}#的角度进行立场分析。
 ###输入：
-- 会话历史：
+- 历史会话：
 {dialogue_text}
+
 
 - 当前轮发言：
 {current_sentence}
 
+
 - 指定目标：
 {target}
 
-###请从#{view_name}#的角度进行立场分析：
+###输出：
 """
 
     def __len__(self):
@@ -99,11 +103,11 @@ class QwenPredictDataset(Dataset):
         if self.view_name:
             sentences = item['sentences']
             speakers = item['speakers']
-            dialogue_text = "".join([f"User {s}: {t}\n" for s, t in zip(speakers[:-1], sentences[:-1])]) or "无历史对话"
+            dialogue_text = "".join([f"speaker {s}: {t}\n" for s, t in zip(speakers[:-1], sentences[:-1])]) or "无历史会话"
 
             content = self.prompt_template.format(
                 dialogue_text=dialogue_text.strip(),
-                current_sentence=sentences[-1],
+                current_sentence=f"speaker {speakers[-1]}：{sentences[-1]}",
                 target=item['target'],
                 view_name=self.view_name
             )
@@ -112,7 +116,7 @@ class QwenPredictDataset(Dataset):
             content = item['instruction'] + item.get('input', '')
             label_text = item.get('output', '')
 
-        prompt_text = f"<|im_start|>user\n{content}<|im_end|>\n<|im_start|>assistant\n"
+        prompt_text = f"{content}\n"
 
         input_ids = self.tokenizer.encode(prompt_text, add_special_tokens=False)
         if len(input_ids) > self.max_length:

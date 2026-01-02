@@ -11,10 +11,10 @@ from src.config import TrainConfig
 
 
 def format_dialogue(sentences, speakers):
-    text = ""
+    text = []
     for sent, spk in zip(sentences, speakers):
-        text += f"User {spk}: {sent}\n"
-    return text.strip()
+        text.append( f"speaker {spk}: {sent}\n")
+    return text
 
 
 def construct_sample(dialogue, current, target, view_name, cot, label_text, current_speaker):
@@ -24,7 +24,7 @@ def construct_sample(dialogue, current, target, view_name, cot, label_text, curr
 请从#{view_name}#的角度进行立场分析。"""
 
     input_text = f"""###输入：
-- 会话历史：
+- 历史会话：
 {dialogue}
 
 - 当前轮发言：
@@ -45,8 +45,9 @@ def construct_sample(dialogue, current, target, view_name, cot, label_text, curr
 
 async def process_single_item(client, sem, item, template, view_name, label_map, model_name):
     async with sem:
-        dialogue = format_dialogue(item['sentences'][:-1], item['speakers'][:-1]) or "无历史对话"
-        current = item['sentences'][-1]
+        dialogue = format_dialogue(item['sentences'], item['speakers'])
+        current = dialogue[-1]
+        dialogue="".join(dialogue[:-1]) or "无历史会话"
         target = item['target']
         label = label_map.get(item['label'], "中立")
 

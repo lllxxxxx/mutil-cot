@@ -6,7 +6,7 @@ import torch
 @dataclass
 class TrainConfig:
     seed: int = 42
-    model_name_or_path: str = "/root/autodl-tmp/Qwen2.5-7B-Instruct"
+    model_name_or_path: str = "/root/autodl-tmp/Qwen2.5-7B"
     template: str = field(default="qwen", metadata={"help": "使用的对话模版类型"})
 
     # --- 路径配置 ---
@@ -42,9 +42,9 @@ class TrainConfig:
     batch_size: int = 4
     gen_batch_size: int = 16
     gradient_accumulation_steps: int = 8
-    learning_rate: float = 5e-5
+    learning_rate: float = 3e-5
     num_epochs: int = 10
-    warmup_ratio: float = 0.03
+    warmup_ratio: float = 0.1
     weight_decay: float = 0.01
     max_grad_norm: float = 1.0
 
@@ -67,4 +67,4 @@ class TrainConfig:
     device: str = "cuda" if torch.cuda.is_available() else "cpu"
     use_flash_attn: bool = True
     enable_4d_mask: bool = False
-    neftune_noise_alpha: float = 5.0
+    neftune_noise_alpha: float = 2.0
