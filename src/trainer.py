@@ -57,6 +57,7 @@ class ManualTrainer:
         current_loss = 0.0
         progress_bar = tqdm(total=self.total_steps, desc="Training", unit="step")
 
+        eval_step=int(len(self.train_dataloader)*self.cfg.eval_ratio/self.cfg.gradient_accumulation_steps)
         for epoch in range(self.cfg.num_epochs):
             epoch_total_loss = 0.0
             for step, batch in enumerate(self.train_dataloader):
@@ -85,26 +86,25 @@ class ManualTrainer:
                         progress_bar.set_postfix(loss=f"{current_loss:.4f}", gn=f"{grad_norm.item():.2f}")
                         if self.cfg.use_swanlab and SWANLAB_INSTALLED: swanlab.log(logs)
                         current_loss = 0.0
-                    if global_step % self.cfg.save_steps == 0: self.save_checkpoint(f"step-{global_step}")
+                    # if global_step % self.cfg.save_steps == 0: self.save_checkpoint(f"step-{global_step}")
+                    if global_step % eval_step == 0:
+                        if self.val_dataloaders:
+                            val_score=self.evaluate(self.val_dataloaders, epoch=global_step/eval_step, stage="val")
+                            if val_score > self.best_metric:
+                                self.best_metric = val_score
+                                print(f" >> New Best Val F1: {self.best_metric:.4f} (Saving...)")
+                                self.save_checkpoint("best_model")
+                                if self.cfg.use_swanlab and SWANLAB_INSTALLED: swanlab.log(
+                                    {"val/best_f1": self.best_metric})
+                            self.model.train()
 
             avg_epoch_loss = epoch_total_loss / len(self.train_dataloader)
             print(f"\n=== Epoch {epoch + 1} Avg Loss: {avg_epoch_loss:.4f} ===")
             if self.cfg.use_swanlab and SWANLAB_INSTALLED: swanlab.log(
                 {"train/loss_epoch_avg": avg_epoch_loss, "train/epoch": epoch + 1})
-
-            if self.val_dataloaders:
-                val_score = self.evaluate(self.val_dataloaders, epoch + 1, stage="val")
-                if val_score > self.best_metric:
-                    self.best_metric = val_score
-                    print(f" >> New Best Val F1: {self.best_metric:.4f} (Saving...)")
-                    self.save_checkpoint("best_model")
-                    if self.cfg.use_swanlab and SWANLAB_INSTALLED: swanlab.log({"val/best_f1": self.best_metric})
-
             self.model.train()
 
         progress_bar.close()
-        self.save_checkpoint("final")
-
         if self.test_dataloaders: self.predict_on_test_set()
         if self.cfg.use_swanlab and SWANLAB_INSTALLED: swanlab.finish()
 
@@ -120,7 +120,7 @@ class ManualTrainer:
         if os.path.exists(path): self.model.load_adapter(path, adapter_name="default")
         self.evaluate(self.test_dataloaders, epoch="TEST", stage="test")
 
-    @torch.no_grad()
+    @torch.inference_mode()
     def evaluate(self, dataloaders, epoch, stage="val"):
         """
         接收 List[DataLoader]，依次推理，结果全在内存聚合，不写文件。

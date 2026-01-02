@@ -37,16 +37,24 @@ class TrainConfig:
         "./data/processed/train_view3.json"
     ])
 
+    read_data_paths: List[str] = field(default_factory=lambda: [
+        "./data/processed/train_view1.json",
+        "./data/processed/train_view2.json",
+        "./data/processed/train_view3.json",
+        "./data/processed/train_raw_view.json"
+    ])
+
     # --- 训练超参 ---
     max_length: int = 2048
     batch_size: int = 4
     gen_batch_size: int = 16
     gradient_accumulation_steps: int = 8
     learning_rate: float = 3e-5
-    num_epochs: int = 10
-    warmup_ratio: float = 0.1
+    num_epochs: int = 4
+    warmup_ratio: float = 0.03
     weight_decay: float = 0.01
     max_grad_norm: float = 1.0
+    eval_ratio: float = 0.25
 
     # --- LoRA ---
     lora_rank: int = 32

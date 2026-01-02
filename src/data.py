@@ -24,14 +24,9 @@ class QwenSFTDataset(Dataset):
         self.data = []
         if isinstance(data_path, str): data_path = [data_path]
         rng = random.Random(seed)
-        d1 = json.load(open(data_path[0], "r", encoding="utf-8"))
-        n = len(d1)
-        k, r = divmod(n, 3)
-        parts = [k + (i < r) for i in range(3)]
-
         for i,path in enumerate(data_path):
-            data=json.loads(open(path, "r", encoding="utf-8").read())
-            self.data.extend(rng.sample(data, parts[0]))
+            data=json.load(open(path, "r", encoding="utf-8"))
+            self.data.extend(data)
         rng.shuffle(self.data)
 
     def __len__(self):
