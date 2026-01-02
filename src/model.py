@@ -1,7 +1,9 @@
+import os
 import torch
 from transformers import AutoTokenizer, AutoModelForCausalLM
 from peft import LoraConfig, get_peft_model, TaskType
 from .config import TrainConfig
+
 
 def _get_neftune_hook(noise_alpha: float):
     def neftune_forward_hook(module, args, output):
@@ -11,7 +13,9 @@ def _get_neftune_hook(noise_alpha: float):
             noise = torch.zeros_like(output).uniform_(-mag_norm, mag_norm)
             return output + noise
         return output
+
     return neftune_forward_hook
+
 
 def load_model_and_tokenizer(cfg: TrainConfig):
     tokenizer = AutoTokenizer.from_pretrained(cfg.model_name_or_path, use_fast=False, trust_remote_code=True)
@@ -21,12 +25,17 @@ def load_model_and_tokenizer(cfg: TrainConfig):
         tokenizer.eos_token = "<|im_end|>"
     tokenizer.padding_side = "right"
 
+    # Get the local rank for this process to load model directly onto the correct GPU
+    local_rank = int(os.environ.get("LOCAL_RANK", 0))
+    device = f"cuda:{local_rank}"
+
     attn_impl = "flash_attention_2" if cfg.use_flash_attn else "eager"
     model = AutoModelForCausalLM.from_pretrained(
         cfg.model_name_or_path,
         torch_dtype=torch.bfloat16,
         trust_remote_code=True,
-        attn_implementation="flash_attention_2"
+        attn_implementation=attn_impl,
+        device_map={"": device}  # Load directly to the correct GPU
     )
     model.config.use_cache = False
 
@@ -37,7 +46,7 @@ def load_model_and_tokenizer(cfg: TrainConfig):
         elif hasattr(model, "embed_tokens"):
             model.embed_tokens.register_forward_hook(hook_fn)
 
-    model.gradient_checkpointing_enable()
+    model.gradient_checkpointing_enable(gradient_checkpointing_kwargs={"use_reentrant": False})
     model.enable_input_require_grads()
 
     peft_config = LoraConfig(
@@ -50,6 +59,5 @@ def load_model_and_tokenizer(cfg: TrainConfig):
     )
     model = get_peft_model(model, peft_config)
     model.print_trainable_parameters()
-    # model.to(cfg.device)  # Managed by Accelerator
 
     return model, tokenizer

@@ -28,7 +28,6 @@ class QwenSFTDataset(Dataset):
             data=json.load(open(path, "r", encoding="utf-8"))
             self.data.extend(data)
         rng.shuffle(self.data)
-
     def __len__(self):
         return len(self.data)
 
@@ -63,7 +62,6 @@ class QwenPredictDataset(Dataset):
 
         with open(data_path, 'r', encoding='utf-8') as f:
             self.data = json.load(f)
-
         self.prompt_template = """您的目标是在给定一段社交媒体中文多轮会话的前提下，判断#当前轮发言#对#指定目标#的立场。可选标签仅包括：#支持#、#反对#、#中立#。
 
 请从#{view_name}#的角度进行立场分析。
