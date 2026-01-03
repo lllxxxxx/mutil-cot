@@ -19,10 +19,14 @@ def _get_neftune_hook(noise_alpha: float):
 
 def load_model_and_tokenizer(cfg: TrainConfig):
     tokenizer = AutoTokenizer.from_pretrained(cfg.model_name_or_path, use_fast=False, trust_remote_code=True)
+    if cfg.template == "qwen":
+        if "<|endoftext|>" in tokenizer.get_vocab():
+            tokenizer.eos_token = "<|endoftext|>"
+            tokenizer.pad_token = "<|endoftext|>"
+
     if tokenizer.pad_token is None:
         tokenizer.pad_token = tokenizer.eos_token
-    if "<|im_end|>" in tokenizer.get_vocab():
-        tokenizer.eos_token = "<|im_end|>"
+
     tokenizer.padding_side = "right"
 
     # Get the local rank for this process to load model directly onto the correct GPU

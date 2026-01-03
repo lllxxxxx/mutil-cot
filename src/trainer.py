@@ -3,6 +3,7 @@ import torch
 import re
 import collections
 from tqdm import tqdm
+from src.utils import save_results_to_json
 from torch.optim import AdamW
 from torch.utils.data import DataLoader, DistributedSampler
 from transformers import get_cosine_schedule_with_warmup
@@ -55,7 +56,8 @@ class ManualTrainer:
         self.test_dataloaders = self._create_distributed_dataloaders(test_datasets) if test_datasets else None
 
         self.scheduler = self._create_scheduler()
-        self.scheduler = self.accelerator.prepare(self.scheduler)
+        # Note: Do NOT prepare scheduler with accelerate - it incorrectly divides
+        # num_training_steps by num_processes, causing LR to decay too fast
 
         self.best_metric = -float('inf')
 
@@ -99,6 +101,8 @@ class ManualTrainer:
 
     def _create_scheduler(self):
         # Calculate total optimization steps
+        # In DDP, each GPU processes sharded data, but all GPUs sync gradients together
+        # So optimizer steps = len(sharded_dataloader) / gradient_accumulation_steps
         steps_per_epoch = len(self.train_dataloader) // self.cfg.gradient_accumulation_steps
         self.total_steps = steps_per_epoch * self.cfg.num_epochs
 
@@ -167,7 +171,7 @@ class ManualTrainer:
                         # Evaluation
                         if global_step > 0 and global_step % eval_step == 0:
                             if self.val_dataloaders:
-                                val_score = self.evaluate(self.val_dataloaders, epoch=global_step / eval_step,
+                                val_score = self.evaluate(self.val_dataloaders, epoch=float(global_step / eval_step),
                                                           stage="val")
                                 if self.accelerator.is_main_process and val_score > self.best_metric:
                                     self.best_metric = val_score
@@ -177,14 +181,7 @@ class ManualTrainer:
                                         swanlab.log({"val/best_f1": self.best_metric})
                                 self.model.train()
 
-            avg_epoch_loss = epoch_total_loss / max(1, num_batches)
-
             self.accelerator.wait_for_everyone()
-
-            if self.accelerator.is_main_process:
-                print(f"\n=== Epoch {epoch + 1} Avg Loss: {avg_epoch_loss:.4f} ===")
-                if self.cfg.use_swanlab and SWANLAB_INSTALLED:
-                    swanlab.log({"train/loss_epoch_avg": avg_epoch_loss, "train/epoch": epoch + 1})
             self.model.train()
 
         if self.accelerator.is_main_process:
@@ -210,10 +207,29 @@ class ManualTrainer:
         if self.accelerator.is_main_process:
             print("\n*** Loading Best Model for Testing ***")
 
+        # Ensure all processes sync before loading
+        self.accelerator.wait_for_everyone()
+
+        # Clear GPU cache before loading adapter to prevent OOM
+        torch.cuda.empty_cache()
+
         path = os.path.join(self.cfg.output_dir, "best_model")
-        if os.path.exists(path):
+
+        # All processes need to load the adapter
+        try:
+            if self.accelerator.is_main_process:
+                print(f"  Loading adapter from: {path}")
             unwrapped_model = self.accelerator.unwrap_model(self.model)
             unwrapped_model.load_adapter(path, adapter_name="default")
+            if self.accelerator.is_main_process:
+                print("  Adapter loaded successfully!")
+        except Exception as e:
+            if self.accelerator.is_main_process:
+                print(f"  Error loading adapter: {e}")
+            return
+
+        # Sync all processes after loading
+        self.accelerator.wait_for_everyone()
 
         self.evaluate(self.test_dataloaders, epoch="TEST", stage="test")
 
@@ -228,6 +244,7 @@ class ManualTrainer:
 
         results_map_global = collections.defaultdict(list)
         gold_labels_map_global = {}
+        raw_data_map_global = {}  # Store raw data for JSON output
 
         label_map = {"支持": 0, "反对": 1, "中立": 2}
         inv_map = {0: "支持", 1: "反对", 2: "中立"}
@@ -265,13 +282,27 @@ class ManualTrainer:
 
                 batch_idxs = batch["original_idx"]
                 batch_labels = batch["label_text"]
+                batch_targets = batch.get("target", [""] * len(batch_idxs))
+                batch_sentences = batch.get("sentences", [[] for _ in range(len(batch_idxs))])
+                batch_prompts = batch.get("prompt_text", [""] * len(batch_idxs))
 
-                for idx, text, gold in zip(batch_idxs, decoded_texts, batch_labels):
+                for idx, text, gold, target, sentences, prompt in zip(batch_idxs, decoded_texts, batch_labels,
+                                                                      batch_targets, batch_sentences, batch_prompts):
                     if isinstance(idx, torch.Tensor):
                         idx = idx.item()
                     label = self._extract_label(text)
                     results_map[idx] = label
                     gold_labels_map[idx] = gold
+                    # Store raw data for JSON (only need once per idx, will be overwritten but same data)
+                    raw_data_map_global[idx] = {
+                        "instruction": prompt,
+                        "target": target,
+                        "type": view_name,
+                        "sentences": sentences,
+                        "output": text,
+                        "pred_label": label,
+                        "gold_label": gold
+                    }
 
             # Convert local results to tensors for gathering
             local_idxs_list = list(results_map.keys())
@@ -341,8 +372,21 @@ class ManualTrainer:
                 final_preds.append(final_vote)
                 final_truths.append(gold)
 
-            score = self._compute_char_f1(final_preds, final_truths)
-            print(f"Epoch {epoch} {stage.capitalize()} F1 Score: {score:.4f}")
+            print(f"\n--- {stage.capitalize()} Per-Class Metrics ---")
+            score = self._compute_char_f1(final_preds, final_truths, print_per_class=True)
+            print(f"Epoch {epoch} {stage.capitalize()} Macro F1 Score: {score:.4f}")
+
+            # Save results to JSON (only entries with complete data)
+            json_results = []
+            for i, idx in enumerate(sorted_idxs):
+                if idx not in raw_data_map_global:
+                    continue  # Skip indices without raw data (from other processes)
+                data = raw_data_map_global[idx].copy()
+                data["final_pred"] = final_preds[i]
+                json_results.append(data)
+
+            json_path = os.path.join(self.cfg.output_dir, f"{stage}_epoch{epoch}_results.json")
+            save_results_to_json(json_results, json_path)
 
             if self.cfg.use_swanlab and SWANLAB_INSTALLED:
                 swanlab.log({f"{stage}/f1": score})
@@ -367,7 +411,7 @@ class ManualTrainer:
             return "中立"
         return max(found, key=lambda x: x[0])[1]
 
-    def _compute_char_f1(self, preds, truths):
+    def _compute_char_f1(self, preds, truths, print_per_class=False):
         labels = ["中立", "支持", "反对"]
         f1_s = []
         for label in labels:
@@ -379,4 +423,6 @@ class ManualTrainer:
             r = len_TP / len_A if len_A > 0 else 0.0
             f1 = 2 * p * r / (p + r) if (p + r) > 0 else 0.0
             f1_s.append(f1)
+            if print_per_class:
+                print(f"  {label}: P={p:.4f}, R={r:.4f}, F1={f1:.4f}")
         return sum(f1_s) / len(f1_s) if f1_s else 0.0

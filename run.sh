@@ -23,6 +23,5 @@ accelerate launch \
     --mixed_precision bf16 \
     --main_process_port 0 \
     main.py \
-    --template qwen
 
 echo "Training finished."

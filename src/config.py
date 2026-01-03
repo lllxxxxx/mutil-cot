@@ -11,10 +11,10 @@ class TrainConfig:
 
     # --- 路径配置 ---
     raw_data_path: str = "./data/raw/train_data.json"
-    val_data_path: str = "./data/raw/dev_data.json"
+    val_data_path: str = "./data/raw/test_data.json"
     test_data_path: str = "./data/raw/test_data.json"
-    output_dir: str = "./saves/qwen2.5-7B-Instruct"
-    num_gpus: int = 4 # Default to 2 GPUs, adjust as needed
+    output_dir: str = "./saves/qwen2.5-7B"
+    num_gpus: int = 2 # Default to 2 GPUs, adjust as needed
 
     # --- API 与 数据生成配置 ---
     api_key: str = "sk-9b269e0b1d8d410f9bcd8373e48c0842"
@@ -51,7 +51,7 @@ class TrainConfig:
     gen_batch_size: int = 16  # Per GPU inference batch size
     gradient_accumulation_steps: int = 4  # Effective batch = batch_size * num_gpus * grad_accum
     learning_rate: float = 3e-5
-    num_epochs: int = 4
+    num_epochs: int = 2
     warmup_ratio: float = 0.1
     weight_decay: float = 0.01
     max_grad_norm: float = 1.0

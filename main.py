@@ -9,7 +9,7 @@ sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
 from src.config import TrainConfig
 from src.utils import setup_seed
-from src.data import QwenSFTDataset, QwenPredictDataset, ManualCollator
+from src.data import SFTDataset, PredictDataset, ManualCollator
 from src.model import load_model_and_tokenizer
 from src.trainer import ManualTrainer
 
@@ -27,13 +27,15 @@ def main():
     model, tokenizer = load_model_and_tokenizer(cfg)
 
     # Create datasets
-    train_dataset = QwenSFTDataset(cfg.read_data_paths, tokenizer, cfg.max_length, cfg.seed)
+    train_dataset = SFTDataset(cfg.read_data_paths, tokenizer, cfg.max_length, cfg.seed, template_name=cfg.template)
 
     val_datasets = []
     test_datasets = []
     for view in cfg.view_names:
-        val_datasets.append(QwenPredictDataset(cfg.val_data_path, tokenizer, cfg.max_length, view_name=view))
-        test_datasets.append(QwenPredictDataset(cfg.test_data_path, tokenizer, cfg.max_length, view_name=view))
+        val_datasets.append(
+            PredictDataset(cfg.val_data_path, tokenizer, cfg.max_length, view_name=view, template_name=cfg.template))
+        test_datasets.append(
+            PredictDataset(cfg.test_data_path, tokenizer, cfg.max_length, view_name=view, template_name=cfg.template))
 
     # Create collators
     train_collator = ManualCollator(tokenizer, use_flash_attn=cfg.use_flash_attn, for_inference=False,
