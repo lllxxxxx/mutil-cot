@@ -66,7 +66,6 @@ class PredictDataset(Dataset):
 
         with open(data_path, 'r', encoding='utf-8') as f:
             self.data = json.load(f)
-
     def __len__(self):
         return len(self.data)
 
@@ -96,7 +95,8 @@ class PredictDataset(Dataset):
             "original_idx": idx,
             "target": target,
             "sentences": sentences,
-            "view_name": self.view_name or ""
+            "view_name": self.view_name or "",
+            "target_type":item["target_type"]
         }
 
 
@@ -123,6 +123,7 @@ class ManualCollator(DataCollatorForSeq2Seq):
         targets = []
         sentences_list = []
         view_names = []
+        target_type=[]
 
         for f in features:
             clean_dict = {}
@@ -141,6 +142,7 @@ class ManualCollator(DataCollatorForSeq2Seq):
             if "target" in f: targets.append(f["target"])
             if "sentences" in f: sentences_list.append(f["sentences"])
             if "view_name" in f: view_names.append(f["view_name"])
+            if "target_type" in f: target_type.append(f["target_type"])   
 
         batch = super().__call__(features_for_model)
 
@@ -154,5 +156,6 @@ class ManualCollator(DataCollatorForSeq2Seq):
         if targets: batch["target"] = targets
         if sentences_list: batch["sentences"] = sentences_list
         if view_names: batch["view_name"] = view_names
+        if target_type: batch["target_type"] = target_type
 
         return batch

@@ -285,23 +285,29 @@ class ManualTrainer:
                 batch_targets = batch.get("target", [""] * len(batch_idxs))
                 batch_sentences = batch.get("sentences", [[] for _ in range(len(batch_idxs))])
                 batch_prompts = batch.get("prompt_text", [""] * len(batch_idxs))
+                batch_target_types = batch.get("target_type", [""] * len(batch_idxs))
 
-                for idx, text, gold, target, sentences, prompt in zip(batch_idxs, decoded_texts, batch_labels,
-                                                                      batch_targets, batch_sentences, batch_prompts):
+                for idx, text, gold, target, sentences, prompt, tgt_type in zip(batch_idxs, decoded_texts, batch_labels,
+                                                                                batch_targets, batch_sentences,
+                                                                                batch_prompts, batch_target_types):
                     if isinstance(idx, torch.Tensor):
                         idx = idx.item()
                     label = self._extract_label(text)
                     results_map[idx] = label
                     gold_labels_map[idx] = gold
-                    # Store raw data for JSON (only need once per idx, will be overwritten but same data)
-                    raw_data_map_global[idx] = {
+                    if idx not in raw_data_map_global:
+                        raw_data_map_global[idx] = {
+                            "target": target,
+                            "target_type": tgt_type,
+                            "sentences": sentences,
+                            "gold_label": gold,
+                            "view_details": {}
+                        }
+
+                    raw_data_map_global[idx]["view_details"][view_name] = {
                         "instruction": prompt,
-                        "target": target,
-                        "type": view_name,
-                        "sentences": sentences,
                         "output": text,
-                        "pred_label": label,
-                        "gold_label": gold
+                        "pred_label": label
                     }
 
             # Convert local results to tensors for gathering
@@ -327,7 +333,35 @@ class ManualTrainer:
             all_preds = self.accelerator.gather(all_preds)
             all_golds = self.accelerator.gather(all_golds)
 
+            # Gather raw data from all processes
+            # Use torch.distributed.all_gather_object as fallback for older accelerate versions
+            local_raw_data = []
+            for k in local_idxs_list:
+                if k in raw_data_map_global:
+                    local_raw_data.append((k, raw_data_map_global[k]))
+
+            # Placeholder for gathered results
+            all_raw_data_gathered = [None for _ in range(self.accelerator.num_processes)]
+            torch.distributed.all_gather_object(all_raw_data_gathered, local_raw_data)
+
+            # Flatten the list of lists
+            all_raw_data_list = []
+            for sublist in all_raw_data_gathered:
+                if sublist:
+                    all_raw_data_list.extend(sublist)
+
             if self.accelerator.is_main_process:
+                # Merge gathered raw data into global map
+                for idx, data in all_raw_data_list:
+                    if idx not in raw_data_map_global:
+                        raw_data_map_global[idx] = data
+                    else:
+                        # Merge view_details if key already exists
+                        if "view_details" in data:
+                            if "view_details" not in raw_data_map_global[idx]:
+                                raw_data_map_global[idx]["view_details"] = {}
+                            raw_data_map_global[idx]["view_details"].update(data["view_details"])
+
                 full_view_preds = []
                 full_view_golds = []
 

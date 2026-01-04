@@ -11,7 +11,7 @@ class TrainConfig:
 
     # --- 路径配置 ---
     raw_data_path: str = "./data/raw/train_data.json"
-    val_data_path: str = "./data/raw/test_data.json"
+    val_data_path: str = "./data/raw/dev_data.json"
     test_data_path: str = "./data/raw/test_data.json"
     output_dir: str = "./saves/qwen2.5-7B"
     num_gpus: int = 2 # Default to 2 GPUs, adjust as needed
@@ -49,17 +49,17 @@ class TrainConfig:
     max_length: int = 2048
     batch_size: int = 4  # Per GPU batch size
     gen_batch_size: int = 16  # Per GPU inference batch size
-    gradient_accumulation_steps: int = 4  # Effective batch = batch_size * num_gpus * grad_accum
+    gradient_accumulation_steps: int = 8  # Effective batch = batch_size * num_gpus * grad_accum
     learning_rate: float = 3e-5
-    num_epochs: int = 2
-    warmup_ratio: float = 0.1
+    num_epochs: int = 3
+    warmup_ratio: float = 0.03
     weight_decay: float = 0.01
     max_grad_norm: float = 1.0
     eval_ratio: float = 0.25
 
     # --- LoRA ---
-    lora_rank: int = 32
-    lora_alpha: int = 64
+    lora_rank: int = 64
+    lora_alpha: int = 128
     lora_dropout: float = 0.05
     lora_target_modules: List[str] = field(default_factory=lambda: [
         "q_proj", "k_proj", "v_proj", "o_proj", "gate_proj", "up_proj", "down_proj"
@@ -67,7 +67,7 @@ class TrainConfig:
 
     # --- 其他 ---
     use_swanlab: bool = True
-    swanlab_project: str = "stance_detection"
+    swanlab_project: str = "4-mix"
     swanlab_run_name: str = "multi_view_cot"
     swanlab_api_key: Optional[str] = "EcJUnP1993IKCvYXbXxJo"
     logging_steps: int = 5
